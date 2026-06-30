@@ -345,7 +345,13 @@ def _materializar_productos_demo(db: Session, cliente) -> None:
                    VALUES (:id, :cod, :cliente_id, 'Credito Empresarial',
                            :monto, :monto, :saldo_total, 0, 'NORMAL', 'vigente',
                            :fecha, :tea, :plazo, 0)
-                   ON CONFLICT (cod_cuenta_credito) DO NOTHING"""
+                   ON CONFLICT (cod_cuenta_credito) DO UPDATE SET
+                      monto_desembolsado = EXCLUDED.monto_desembolsado,
+                      saldo_capital = EXCLUDED.saldo_capital,
+                      saldo_total = EXCLUDED.saldo_total,
+                      tea = EXCLUDED.tea,
+                      cuotas_total = EXCLUDED.cuotas_total,
+                      estado = EXCLUDED.estado"""
             ),
             {
                 "id": str(uuid.uuid4()),
