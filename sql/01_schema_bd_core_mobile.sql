@@ -1,5 +1,5 @@
 -- ============================================================================
--- bd_core_mobile — Capa operacional de canales moviles (Banco Andino)
+-- bd_core_mobile — Capa operacional de canales moviles (Banco Falabella)
 -- ----------------------------------------------------------------------------
 -- Base PostgreSQL servida por un backend FastAPI "mobile" (puerto sugerido 8003).
 -- La consumen DOS apps moviles:

@@ -7,7 +7,7 @@ from app.routes import (
 )
 
 app = FastAPI(
-    title="Core Mobile — Banco Andino",
+    title="Core Mobile — Banco Falabella",
     description="Capa operacional de canales moviles: fuerza de ventas en campo "
                 "y app de clientes. Alimenta al core bd_core_financiero.",
     version="1.0.0",
