@@ -354,7 +354,7 @@ def _materializar_productos_demo(db: Session, cliente) -> None:
                 "monto": monto,
                 "saldo_total": round(cuota * plazo, 2),
                 "fecha": datetime.now(timezone.utc).date(),
-                "tea": float(s["tea_referencial"] or 43.92),
+                "tea": _tea_percent(s["tea_referencial"]),
                 "plazo": plazo,
             },
         )
@@ -385,19 +385,28 @@ def _materializar_productos_demo(db: Session, cliente) -> None:
             )
         db.execute(
             text(
-                """INSERT INTO cr_movimientos
-                     (id, cod_operacion, cliente_id, cod_cuenta, tipo, concepto,
-                      canal, monto, moneda, fecha_operacion)
-                   VALUES (:id, :codop, :cliente_id, :cuenta, 'CRE',
-                           'Desembolso credito empresarial', 'CORE', :monto,
-                           'PEN', now())
-                   ON CONFLICT (cod_operacion) DO NOTHING"""
+                """WITH inserted AS (
+                     INSERT INTO cr_movimientos
+                       (id, cod_operacion, cliente_id, cod_cuenta, tipo, concepto,
+                        canal, monto, moneda, fecha_operacion)
+                     VALUES (:id, :codop, :cliente_id, :cuenta_mov, 'CRE',
+                             'Desembolso credito empresarial', 'CORE', :monto,
+                             'PEN', now())
+                     ON CONFLICT (cod_operacion) DO NOTHING
+                     RETURNING id
+                   )
+                   UPDATE cr_cuentas_ahorro
+                      SET saldo_capital = COALESCE(saldo_capital, 0) + :monto
+                    WHERE cliente_id = :cliente_id
+                      AND cod_cuenta_ahorro = :cuenta_ahorro
+                      AND EXISTS (SELECT 1 FROM inserted)"""
             ),
             {
                 "id": str(uuid.uuid4()),
                 "codop": f"OP-{s['numero_expediente']}",
                 "cliente_id": cliente_id,
-                "cuenta": cod_credito,
+                "cuenta_mov": cuenta,
+                "cuenta_ahorro": cuenta,
                 "monto": monto,
             },
         )
@@ -420,7 +429,42 @@ def _materializar_productos_demo(db: Session, cliente) -> None:
                 "exp": s["numero_expediente"],
             },
         )
+    _sincronizar_saldo_desembolsos(db, cliente_id)
     db.commit()
+
+
+def _tea_percent(value) -> float:
+    tea = _float(value, 43.92)
+    return round(tea * 100, 2) if 0 < tea <= 1 else tea
+
+
+def _float(value, default: float = 0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _sincronizar_saldo_desembolsos(db: Session, cliente_id: str) -> None:
+    """Asegura saldos correctos para creditos ya desembolsados antes de esta regla."""
+    db.execute(
+        text(
+            """WITH total AS (
+                 SELECT COALESCE(SUM(monto_desembolsado), 0) AS monto
+                   FROM cr_creditos
+                  WHERE cliente_id = :cliente_id
+                    AND estado = 'vigente'
+               )
+               UPDATE cr_cuentas_ahorro
+                  SET saldo_capital = GREATEST(
+                        COALESCE(saldo_capital, 0),
+                        2500.00 + (SELECT monto FROM total)
+                      )
+                WHERE cliente_id = :cliente_id
+                  AND tipo_cuenta = 'Ahorro Digital'"""
+        ),
+        {"cliente_id": cliente_id},
+    )
 
 
 def _materializar_movimientos_servicios(
